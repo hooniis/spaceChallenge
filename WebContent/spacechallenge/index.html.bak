@@ -1,0 +1,16 @@
+<!DOCTYPE html>  
+<html>
+    <head>  
+        <meta charset="utf-8" />
+        <title> Space Challenge </title>
+        <script type="text/javascript" src="./js/phaser.min.js"></script>
+		<script src="boot.js"></script>
+		<script src="preloader.js"></script>
+		<script src="mainMenu.js"></script>
+		<script src="game.js"></script>
+		<IMG SRC="./assets/index.JPG" style="display: block; margin: 0 auto; WIDTH="848" HEIGHT="120" ALIGN="center">
+    </head>
+    <body>
+		
+    </body>  
+</html>  

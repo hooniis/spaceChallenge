@@ -1,0 +1,374 @@
+BasicGame.Game = function (game) {
+	
+};
+
+var starfield;
+var gameoverText;
+var score = 0;
+var txtScore; 
+var eventScore;
+var gameovercheck = 0;
+var flag = true;
+
+BasicGame.Game.prototype = {
+  create : function() {
+		this.setupBackground();
+		this.setupShip();
+		this.setupStone();
+		this.setupboomItem();
+		this.setuptimeItem();
+		this.countScore();
+		this.setupAudio();
+		this.explosionPool = this.add.group();
+		this.explosionPool.enableBody = true;
+		this.explosionPool.physicsBodyType = Phaser.Physics.ARCADE;
+		this.explosionPool.createMultiple(100, 'explosion');
+		this.explosionPool.setAll('anchor.x', 0.5);
+		this.explosionPool.setAll('anchor.y', 0.5);
+		this.explosionPool.forEach(function (explosion) {
+			explosion.animations.add('boom');
+		});
+	},
+	
+	//점수 계산
+	countScore: function() {
+		this.txtScore = game.add.text(420, 10, "0", { fontSize: "25px", fill: "#FFFFFF" });
+		this.eventScore = game.time.events.loop(Phaser.Timer.SECOND, function () {score++; this.txtScore.setText("" + score);}, this);
+
+	},
+	
+	//배경생성
+	setupBackground: function() {	
+		this.game.world.setBounds(0, 0, 1920, 1200);
+		this.game.physics.startSystem(Phaser.Physics.P2JS);
+		this.game.physics.startSystem(Phaser.Physics.ARCADE); /////
+		this.game.physics.p2.defaultRestitution = 0.8;
+		this.starfield = this.game.add.tileSprite(0, 0, 848, 450, 'stars');
+		this.starfield.fixedToCamera = true;
+		
+		this.ROTATION_SPEED = 180; // degrees/second
+		this.ACCELERATION = 200; // pixels/second/second
+		this.MAX_SPEED = 250; // pixels/second
+		this.MIN_SPEED = 10;
+		this.DRAG = 50; // pixels/second
+	},
+	
+	// 소리관련
+	setupAudio: function(){
+		bgm = this.game.add.audio('bgm');
+		bgm.play();
+		this.explosionBGM = this.add.audio('explosionsound'); ///// 죽을때 소리
+		this.boomitemBGM = this.add.audio('boomitemsound'); ///// 별먹을때 소리
+		this.timeitemBGM = this.add.audio('timeitemsound'); ////타임 아이템 먹을때 소리
+		
+	},
+	
+	//우주선 생성
+	setupShip: function() {
+		// Add the ship to the stage
+		this.ship = this.game.add.sprite(this.game.width/2, this.game.height/2 + 150, 'ship');
+		this.ship.anchor.setTo(0.5, 0.5);
+		this.ship.angle = -90; // Point the ship up
+		this.ship.collideWorldBounds = true;
+		this.game.physics.enable(this.ship, Phaser.Physics.ARCADE);
+		
+		this.ship.body.setSize(25, 20, 4, 4); //hitbox 를 작게 만든다
+		// Set maximum velocity
+		this.ship.body.maxVelocity.setTo(this.MAX_SPEED, this.MAX_SPEED); // x, y
+		// Add drag to the ship that slows it down when it is not accelerating
+		this.ship.body.drag.setTo(this.DRAG, this.DRAG); // x, y
+		
+		// 우주선 키조작
+		this.game.input.keyboard.addKeyCapture([
+			Phaser.Keyboard.LEFT,
+			Phaser.Keyboard.RIGHT,
+			Phaser.Keyboard.UP,
+			Phaser.Keyboard.DOWN
+		]);
+	},
+	
+	
+	
+	// 소행성 생성
+	setupStone: function() {
+		// Add the stone
+		this.stone = this.add.group();
+		this.stone.enableBody = true;
+		this.stone.physicsBodyType = Phaser.Physics.ARCADE;
+		this.stone.createMultiple(100, 'stone');
+		this.stone.setAll('outOfBoundsKill', true);
+		this.stone.setAll('checkWorldBounds', true);
+		this.game.physics.enable(this.stone, Phaser.Physics.ARCADE);
+		this.nextEnemyAt = 0;
+		this.delay = 200;
+	},	
+	
+	// 소행성 소멸 아이템 생성
+	setupboomItem: function() {
+		// Add the boomitem
+		this.boomitem = this.add.group();
+		this.boomitem.enableBody = true;
+		this.boomitem.physicsBodyType = Phaser.Physics.ARCADE;
+		this.boomitem.createMultiple(20, 'boomitem');
+		this.boomitem.setAll('outOfBoundsKill', true);
+		this.boomitem.setAll('checkWorldBounds', true);
+		this.game.physics.enable(this.boomitem, Phaser.Physics.ARCADE);
+		this.nextEnemyAt1 = 0;
+		this.idelay = 2000;
+	},	
+	// 시간 아이템
+	setuptimeItem: function() {
+		// Add the timeitem
+		this.timeitem = this.add.group();
+		this.timeitem.enableBody = true;
+		this.timeitem.physicsBodyType = Phaser.Physics.ARCADE;
+		this.timeitem.createMultiple(20, 'timeItem');
+		this.timeitem.setAll('outOfBoundsKill', true);
+		this.timeitem.setAll('checkWorldBounds', true);
+		this.game.physics.enable(this.timeitem, Phaser.Physics.ARCADE);
+		this.nextEnemyAt2 = 0;
+		this.jdelay = 2000;
+	},
+
+	
+	update : function() {
+		this.setBackground1();
+		this.setmoveShip();
+		this.setmoveStone();
+		this.setmoveboomItem();
+		this.setmovetimeItem();
+		this.setCrusted();
+		this.restart();
+	},
+	
+	// 배경화면 세팅
+	setBackground1 : function() {
+		this.starfield.tilePosition.y += 1.0; //배경 점점 위로
+		// Keep the ship on the screen
+		if (this.ship.x > this.game.width) this.ship.x = this.game.width;
+		if (this.ship.x < 0) this.ship.x = 0;
+		if (this.ship.y > this.game.height) this.ship.y = this.game.height;
+		if (this.ship.y < 0) this.ship.y = 0;
+
+		if (this.leftInputIsActive()) {
+			// If the LEFT key is down, rotate left
+			this.ship.body.angularVelocity = -this.ROTATION_SPEED;
+		} else if (this.rightInputIsActive()) {
+			// If the RIGHT key is down, rotate right
+			this.ship.body.angularVelocity = this.ROTATION_SPEED;
+		} else {
+			// Stop rotating
+			this.ship.body.angularVelocity = 0;
+		}
+	},
+	
+
+	
+	//우주선 움직임 세팅
+	setmoveShip : function() {
+		if (this.upInputIsActive()) {
+			// If the UP key is down, thrust
+			// Calculate acceleration vector based on this.angle and this.ACCELERATION
+			this.ship.body.acceleration.x = Math.cos(this.ship.rotation) * this.ACCELERATION;
+			this.ship.body.acceleration.y = Math.sin(this.ship.rotation) * this.ACCELERATION;
+
+			// Show the frame from the spritesheet with the engine on
+			this.ship.frame = 1;
+		} else {
+			// Otherwise, stop thrusting
+			this.ship.body.acceleration.setTo(0, 0);
+
+			// Show the frame from the spritesheet with the engine off
+			this.ship.frame = 0;
+		}
+	},
+	
+	 
+	 
+	//소행성 움직임 세팅
+	setmoveStone : function() {
+		if (this.nextEnemyAt < this.time.now && this.stone.countDead() > 0) {
+			this.nextEnemyAt = this.time.now + this.delay;
+			var stone = this.stone.getFirstExists(false);
+			// spawn at a random location top of the screen
+			stone.reset(this.rnd.integerInRange(0, 800), this.rnd.integerInRange(0,0),100);
+			// also randomize the speed
+			if(flag==true){
+				stone.body.velocity.x = this.rnd.integerInRange(-100, 100);
+				stone.body.velocity.y = this.rnd.integerInRange(20, 200);
+			}
+			else{
+				stone.body.velocity.x = this.rnd.integerInRange(-30, 30);
+				stone.body.velocity.y = this.rnd.integerInRange(10, 60);
+			}
+				
+		}
+	},	
+		
+	//붐아이템 움직임 세팅
+	setmoveboomItem : function() {
+		if (this.nextEnemyAt1 < this.time.now && this.boomitem.countDead() > 0) {
+		this.nextEnemyAt1 = this.time.now + this.idelay;
+		var boomitem = this.boomitem.getFirstExists(false);
+		// spawn at a random location top of the screen
+		boomitem.reset(this.rnd.integerInRange(0, 800), this.rnd.integerInRange(0,0),100);
+		// also randomize the speed
+		boomitem.body.velocity.x = this.rnd.integerInRange(-100, 100);
+		boomitem.body.velocity.y = this.rnd.integerInRange(20, 200);
+		}	
+	},
+	
+	//타임아이템 움직임 세팅
+	setmovetimeItem : function() {
+		if (this.nextEnemyAt2 < this.time.now && this.timeitem.countDead() > 0) {
+		this.nextEnemyAt2 = this.time.now + this.jdelay;
+		var timeitem = this.timeitem.getFirstExists(false);
+		// spawn at a random location top of the screen
+		timeitem.reset(this.rnd.integerInRange(0, 800), this.rnd.integerInRange(0,0),100);
+		// also randomize the speed
+		timeitem.body.velocity.x = this.rnd.integerInRange(-100, 100);
+		timeitem.body.velocity.y = this.rnd.integerInRange(20, 200);
+		}	
+	},
+	
+	
+	// 충돌관련 세팅
+	setCrusted : function() {
+		game.physics.arcade.collide(this.stone, this.ship, this.shipHit,null, this);
+		game.physics.arcade.collide(this.boomitem, this.ship, this.eatBoomItem, null, this);
+		game.physics.arcade.collide(this.timeitem, this.ship, this.eatTimeItem, null, this);
+	},
+	
+	// 우주선-행성 충돌
+	shipHit : function (stone, ship) {
+		this.explode(stone);
+		stone.kill();
+		this.explode(stone);
+		ship.kill();
+		
+		this.displayEnd();
+		this.game.time.events.remove(this.eventScore); //////죽으면 점수 그만 올라감
+		this.explosionBGM.play(); ///// 죽을때 터지는 소리
+		gameovercheck = 1;
+	},
+	
+	// 게임오버 글씨 띄우기
+	displayEnd: function () { 
+
+		if (this.gameoverText && this.gameoverText.exists) { // you can't win and lose at the same time 
+			return; 
+		}
+		
+		gameoverText = game.add.text(300, 150, '', { fontSize: '40px', fill: '#fff' });
+		totalScore = game.add.text(335, 250, '', { fontSize: '20px', fill: '#fff' });
+		gameoverText.text ='GAME OVER';
+		totalScore.text ='FINAL SCORE : '+score;
+
+	},
+	
+	restart : function() {
+		if(this.input.keyboard.isDown(Phaser.Keyboard.Z) || this.input.activePointer.isDown) { //z키나 마우스 포인트가 눌리면 fire 함수 호출
+			if(gameovercheck==1){
+				gameovercheck = 0;
+				this.quitGame();
+			}
+		}
+		
+	},
+	
+
+	// 붐 아이템을 먹었을때
+	eatBoomItem : function (boomitem,ship) {
+		ship.kill();
+		this.boomitemBGM.play(); ///// 아이템 먹는 소리
+		this.stone.destroy(); // 소행성 전부 삭제
+		
+		this.setupStone(); // 소행성 재생성
+		this.setmoveStone(); // 소행성 재셋팅
+		
+	},
+	
+	// 타임아이템 먹기
+	eatTimeItem : function (timeitem,ship) {
+		ship.kill();
+		this.timeitemBGM.play(); ///// 아이템 먹는 소리
+		flag = false;
+		//this.setmoveStone();
+		
+		setTimeout(function() {flag = true; this.setmoveStone();}, 5000); // 5초후에 속도 원상복구
+	},
+	
+	// 폭발 이미지
+	explode : function (sprite) {
+		if (this.explosionPool.countDead() === 0) {
+			return;
+		}
+		var explosion = this.explosionPool.getFirstExists(false);
+		explosion.reset(sprite.x, sprite.y);
+		explosion.play('boom', 15, false, true);
+		// add the original sprite's velocity to the explosion
+		explosion.body.velocity.x = sprite.body.velocity.x;
+		explosion.body.velocity.y = sprite.body.velocity.y;
+	},
+	
+	
+	leftInputIsActive : function() {
+		var isActive = false;
+
+		isActive = this.input.keyboard.isDown(Phaser.Keyboard.LEFT);
+		isActive |= (this.game.input.activePointer.isDown &&
+			this.game.input.activePointer.x < this.game.width/4);
+
+		return isActive;
+	},
+
+	rightInputIsActive : function() {
+		var isActive = false;
+
+		isActive = this.input.keyboard.isDown(Phaser.Keyboard.RIGHT);
+		isActive |= (this.game.input.activePointer.isDown &&
+			this.game.input.activePointer.x > this.game.width/2 + this.game.width/4);
+
+		return isActive;
+	},
+
+	upInputIsActive : function() {
+		var isActive = false;
+
+		isActive = this.input.keyboard.isDown(Phaser.Keyboard.UP);
+		isActive |= (this.game.input.activePointer.isDown &&
+			this.game.input.activePointer.x > this.game.width/4 &&
+			this.game.input.activePointer.x < this.game.width/2 + this.game.width/4);
+
+		return isActive;
+			
+	},
+	
+	//디버그 용도
+	render: function() { 
+	//this.game.debug.body(this.ship);
+	//this.game.debug.body(this.stone);
+	},
+	
+	quitGame: function (pointer) {
+		this.ship.destroy();
+		this.stone.destroy();
+		this.boomitem.destroy();
+		this.timeitem.destroy();
+		this.explosionPool.destroy();
+		score = 0;
+		eventScore = 0;
+		bgm.destroy();
+		this.state.start('MainMenu');
+	 }
+};
+
+var game = new Phaser.Game(848, 450, Phaser.AUTO, 'game');
+
+game.state.add('game', BasicGame, true);
+game.state.add('Boot', BasicGame.Boot);
+game.state.add('Preloader', BasicGame.Preloader);
+game.state.add('MainMenu', BasicGame.MainMenu);
+game.state.add('Game', BasicGame.Game);
+
+game.state.start('Boot');
