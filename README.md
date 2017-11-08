@@ -1,3 +1,2 @@
-# spacechallenge
---  
-## Phaser을 이용한 웹게임 만들기
+# spacechallenge 
+### Phaser을 이용한 웹게임 만들기
